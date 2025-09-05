@@ -1,0 +1,188 @@
+{
+  "name": "demojibakelizador",
+  "displayName": "Demojibakelizador - Encoding Fixer",
+  "description": "Detecta e corrige problemas de encoding (mojibake) em arquivos de texto",
+  "version": "1.0.0",
+  "publisher": "growthfolio",
+  "engines": {
+    "vscode": "^1.74.0"
+  },
+  "categories": [
+    "Other",
+    "Formatters",
+    "Linters"
+  ],
+  "keywords": [
+    "encoding",
+    "utf-8",
+    "mojibake",
+    "charset",
+    "iso-8859-1",
+    "windows-1252"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "demojibakelizador.fixCurrentFile",
+        "title": "🔧 Fix Encoding",
+        "category": "Demojibakelizador"
+      },
+      {
+        "command": "demojibakelizador.detectCurrentFile",
+        "title": "🔍 Detect Encoding",
+        "category": "Demojibakelizador"
+      },
+      {
+        "command": "demojibakelizador.scanWorkspace",
+        "title": "📁 Scan Workspace",
+        "category": "Demojibakelizador"
+      },
+      {
+        "command": "demojibakelizador.convertToISO",
+        "title": "🔄 Convert to ISO-8859-1",
+        "category": "Demojibakelizador"
+      },
+      {
+        "command": "demojibakelizador.showReport",
+        "title": "📊 Show Report",
+        "category": "Demojibakelizador"
+      },
+      {
+        "command": "demojibakelizador.openSettings",
+        "title": "⚙️ Settings",
+        "category": "Demojibakelizador"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "demojibakelizador.fixCurrentFile",
+          "group": "1_modification@1",
+          "when": "editorTextFocus"
+        },
+        {
+          "command": "demojibakelizador.detectCurrentFile",
+          "group": "1_modification@2",
+          "when": "editorTextFocus"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "demojibakelizador.fixCurrentFile",
+          "group": "2_workspace@1",
+          "when": "resourceExtname =~ /\\.(txt|md|java|js|ts|html|css|xml|properties|csv|go|py|rb|php|c|cpp|h|hpp)$/"
+        },
+        {
+          "command": "demojibakelizador.scanWorkspace",
+          "group": "2_workspace@2",
+          "when": "explorerResourceIsFolder"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "demojibakelizador.fixCurrentFile",
+          "when": "editorIsOpen"
+        },
+        {
+          "command": "demojibakelizador.detectCurrentFile",
+          "when": "editorIsOpen"
+        },
+        {
+          "command": "demojibakelizador.scanWorkspace",
+          "when": "workspaceFolderCount > 0"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Demojibakelizador",
+      "properties": {
+        "demojibakelizador.binaryPath": {
+          "type": "string",
+          "default": "",
+          "description": "Caminho para o binário demojibake (deixe vazio para auto-detectar)"
+        },
+        "demojibakelizador.autoDetectOnOpen": {
+          "type": "boolean",
+          "default": true,
+          "description": "Detectar encoding automaticamente ao abrir arquivos"
+        },
+        "demojibakelizador.showStatusBar": {
+          "type": "boolean",
+          "default": true,
+          "description": "Mostrar encoding na barra de status"
+        },
+        "demojibakelizador.autoBackup": {
+          "type": "boolean",
+          "default": true,
+          "description": "Criar backup antes de converter"
+        },
+        "demojibakelizador.backupSuffix": {
+          "type": "string",
+          "default": ".bak",
+          "description": "Sufixo para arquivos de backup"
+        },
+        "demojibakelizador.fileExtensions": {
+          "type": "array",
+          "default": [".txt", ".md", ".java", ".js", ".ts", ".html", ".css", ".xml", ".properties", ".csv"],
+          "description": "Extensões de arquivo para processar"
+        },
+        "demojibakelizador.excludeDirectories": {
+          "type": "array",
+          "default": ["node_modules", ".git", "target", "build", "dist"],
+          "description": "Diretórios para ignorar"
+        },
+        "demojibakelizador.fixMojibake": {
+          "type": "boolean",
+          "default": true,
+          "description": "Tentar corrigir mojibake automaticamente"
+        },
+        "demojibakelizador.stripBOM": {
+          "type": "boolean",
+          "default": true,
+          "description": "Remover BOM UTF-8"
+        }
+      }
+    },
+    "views": {
+      "explorer": [
+        {
+          "id": "demojibakelizadorView",
+          "name": "Encoding Issues",
+          "when": "demojibakelizador.hasIssues"
+        }
+      ]
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "demojibakelizador",
+          "title": "Demojibakelizador",
+          "icon": "$(symbol-text)"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "devDependencies": {
+    "@types/node": "16.x",
+    "@types/vscode": "^1.74.0",
+    "typescript": "^4.9.4"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/growthfolio/demojibake.git"
+  },
+  "bugs": {
+    "url": "https://github.com/growthfolio/demojibake/issues"
+  },
+  "homepage": "https://github.com/growthfolio/demojibake#readme",
+  "license": "MIT"
+}

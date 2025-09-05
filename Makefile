@@ -73,3 +73,21 @@ docker-build:
 # Install hooks
 install-hooks:
 	./scripts/install_hooks.sh
+
+# Build VS Code extension
+build-extension:
+	@echo "Building VS Code extension..."
+	powershell -ExecutionPolicy Bypass -File build-extension.ps1
+
+# Test VS Code extension
+test-extension: build build-extension
+	@echo "Testing VS Code extension..."
+	powershell -ExecutionPolicy Bypass -File test-extension.ps1
+
+# Package everything (CLI + GUI + Extension)
+package-all: build-all build-extension
+	@echo "Creating complete distribution..."
+	@cp README.md $(BUILD_DIR)/
+	@cp LICENSE $(BUILD_DIR)/
+	@cp vscode-extension/README.md $(BUILD_DIR)/EXTENSION-README.md
+	@echo "Complete distribution ready in $(BUILD_DIR)/"
