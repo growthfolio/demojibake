@@ -1,0 +1,4 @@
+Este Ã© um arquivo com mojibake tÃ­pico.
+Acentos como Ã¡, Ã©, Ã­, Ã³, Ãº aparecem incorretamente.
+TambÃ©m temos Ã§, Ã±, e outros caracteres especiais.
+Este texto foi originalmente em UTF-8 mas foi lido como Latin-1.

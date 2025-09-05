@@ -1,0 +1,5 @@
+﻿Este arquivo tem BOM UTF-8 no início.
+Acentos corretos: á, é, í, ó, ú, ç, ñ
+Símbolos: © ® ™ € £ ¥
+Aspas: "curvas" e 'simples'
+Travessão: — e hífen: -

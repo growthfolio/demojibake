@@ -1,0 +1,5 @@
+Texto com problemas de Windows-1252:
+â€œAspas curvesâ€ aparecem como mojibake
+â€" Travessão longo vira símbolos estranhos
+â€¢ Bullet points ficam incorretos
+Â© Copyright symbol fica estranho

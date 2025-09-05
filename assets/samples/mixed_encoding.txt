@@ -1,0 +1,4 @@
+Arquivo com encoding misto simulado:
+Parte normal: Esta é uma frase normal.
+Parte com mojibake: Este Ã© um texto com problemas de codificaÃ§Ã£o.
+Símbolos especiais: â€œtextoâ€ e â€" travessão.
