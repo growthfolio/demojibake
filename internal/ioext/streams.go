@@ -2,7 +2,6 @@ package ioext
 
 import (
 	"bytes"
-	"fmt"
 	"io"
 	"io/fs"
 	"os"

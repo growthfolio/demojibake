@@ -7,7 +7,6 @@ import (
 	"io"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
@@ -15,9 +14,13 @@ import (
 	"time"
 
 	"github.com/growthfolio/demojibake/internal/codec"
+	"github.com/growthfolio/demojibake/internal/config"
 	"github.com/growthfolio/demojibake/internal/fsops"
+	"github.com/growthfolio/demojibake/internal/interactive"
 	"github.com/growthfolio/demojibake/internal/ioext"
 	"github.com/growthfolio/demojibake/internal/logx"
+	"github.com/growthfolio/demojibake/internal/reports"
+	"github.com/growthfolio/demojibake/internal/ui"
 )
 
 type Config struct {
@@ -38,6 +41,15 @@ type Config struct {
 	FailIfNotUTF8  bool
 	ExcludeDirs    string
 	Verbose        bool
+	ProgressBar    bool
+	Colors         bool
+	Interactive    bool
+	Preset         string
+	ReportFormat   string
+	ReportOutput   string
+	ToEncoding     string
+	AutoFix        bool
+	ValidateOnly   bool
 }
 
 type Result struct {
@@ -102,8 +114,30 @@ func parseFlags() *Config {
 	flag.BoolVar(&config.FailIfNotUTF8, "fail-if-not-utf8", false, "Exit with error if non-UTF8 files found")
 	flag.StringVar(&config.ExcludeDirs, "exclude-dirs", "", "Directories to exclude (CSV)")
 	flag.BoolVar(&config.Verbose, "v", false, "Verbose output")
+	flag.BoolVar(&config.ProgressBar, "progress", true, "Show progress bar")
+	flag.BoolVar(&config.Colors, "colors", true, "Enable colored output")
+	flag.BoolVar(&config.Interactive, "interactive", false, "Interactive mode (ask for each file)")
+	flag.StringVar(&config.Preset, "preset", "", "Use preset configuration (java, web, docs, go)")
+	flag.StringVar(&config.ReportFormat, "report-format", "", "Generate report (html, json)")
+	flag.StringVar(&config.ReportOutput, "report-output", "report.html", "Report output file")
+	flag.StringVar(&config.ToEncoding, "to", "", "Convert TO encoding (iso-8859-1, windows-1252, etc)")
+	flag.BoolVar(&config.AutoFix, "auto-fix", false, "Auto-fix incompatible characters when converting to legacy encodings")
+	flag.BoolVar(&config.ValidateOnly, "validate-only", false, "Only validate compatibility, don't convert")
 	
 	flag.Parse()
+
+	// Apply preset if specified
+	if config.Preset != "" {
+		if preset, exists := config.LoadPreset(config.Preset); exists {
+			config.ApplyPreset(preset)
+		} else {
+			fmt.Printf("Unknown preset: %s\nAvailable presets: %v\n", config.Preset, config.ListPresets())
+			os.Exit(2)
+		}
+	}
+
+	// Configure UI
+	ui.EnableColors(config.Colors)
 
 	if config.Workers < 1 {
 		config.Workers = 2
@@ -113,6 +147,28 @@ func parseFlags() *Config {
 	}
 
 	return config
+}
+
+func (c *Config) LoadPreset(name string) (config.Preset, bool) {
+	return config.LoadPreset(name)
+}
+
+func (c *Config) ListPresets() []string {
+	return config.ListPresets()
+}
+
+func (c *Config) ApplyPreset(preset config.Preset) {
+	if c.Extensions == "" {
+		c.Extensions = strings.Join(preset.Extensions, ",")
+	}
+	if c.ExcludeDirs == "" {
+		c.ExcludeDirs = strings.Join(preset.ExcludeDirs, ",")
+	}
+	if c.BackupSuffix == ".bak" && preset.Backup {
+		c.BackupSuffix = ".bak"
+	}
+	c.StripBOM = preset.StripBOM
+	c.FixMojibake = preset.FixMojibake
 }
 
 func run(ctx context.Context, config *Config) error {
@@ -144,6 +200,22 @@ func run(ctx context.Context, config *Config) error {
 	if len(files) == 0 {
 		logx.Info("No files found to process")
 		return nil
+	}
+
+	// Initialize progress bar
+	var progressBar *ui.ProgressBar
+	if config.ProgressBar && len(files) > 1 {
+		progressBar = ui.NewProgressBar(len(files))
+	}
+
+	// Initialize report
+	var report *reports.Report
+	if config.ReportFormat != "" {
+		report = &reports.Report{
+			Title:       "Demojibakelizador Report",
+			GeneratedAt: time.Now(),
+			Files:       make([]reports.FileResult, 0),
+		}
 	}
 
 	// Process files
@@ -179,9 +251,34 @@ func run(ctx context.Context, config *Config) error {
 	for result := range results {
 		stats.Total++
 		
+		// Update progress bar
+		if progressBar != nil {
+			progressBar.Update(stats.Total)
+		}
+		
+		// Handle interactive mode
+		if config.Interactive && !config.DetectOnly && result.Status == "WARN" {
+			action := interactive.PromptFileAction(result.Path, result.From, result.Confidence)
+			switch action {
+			case "quit":
+				cancel()
+				break
+			case "skip":
+				result.Status = "SKIP"
+			case "convert":
+				// Re-process file for conversion
+				result = processFile(result.Path, config)
+			}
+		}
+		
 		if result.Error != nil {
 			stats.Errors++
-			logx.Printf("ERRO | %s | error=%v\n", result.Path, result.Error)
+			message := fmt.Sprintf("%s | error=%v", result.Path, result.Error)
+			if config.Colors {
+				logx.Printf("%s\n", ui.FormatStatus("ERRO", message))
+			} else {
+				logx.Printf("ERRO | %s\n", message)
+			}
 		} else {
 			confidence := ""
 			if result.Confidence > 0 {
@@ -193,8 +290,12 @@ func run(ctx context.Context, config *Config) error {
 				applied = fmt.Sprintf(" | applied=%s", result.Applied)
 			}
 			
-			logx.Printf("%s | %s | from=%s%s%s\n", 
-				result.Status, result.Path, result.From, confidence, applied)
+			message := fmt.Sprintf("%s | from=%s%s%s", result.Path, result.From, confidence, applied)
+			if config.Colors {
+				logx.Printf("%s\n", ui.FormatStatus(result.Status, message))
+			} else {
+				logx.Printf("%s | %s\n", result.Status, message)
+			}
 			
 			switch result.Status {
 			case "FIX":
@@ -205,12 +306,59 @@ func run(ctx context.Context, config *Config) error {
 				stats.Skipped++
 			}
 		}
+		
+		// Add to report
+		if report != nil {
+			reportFile := reports.FileResult{
+				Path:       result.Path,
+				Status:     result.Status,
+				From:       result.From,
+				To:         "utf-8",
+				Confidence: result.Confidence,
+				Applied:    result.Applied,
+			}
+			if result.Error != nil {
+				reportFile.Error = result.Error.Error()
+			}
+			report.Files = append(report.Files, reportFile)
+		}
+	}
+	
+	// Finish progress bar
+	if progressBar != nil {
+		progressBar.Finish()
+	}
+
+	// Generate report
+	if report != nil {
+		report.Summary = reports.Summary{
+			Total:     stats.Total,
+			Converted: stats.Changed,
+			Skipped:   stats.Skipped,
+			Errors:    stats.Errors,
+			NonUTF8:   stats.NonUTF8,
+		}
+		
+		switch config.ReportFormat {
+		case "html":
+			if err := reports.GenerateHTMLReport(*report, config.ReportOutput); err != nil {
+				logx.Error("Failed to generate HTML report: %v", err)
+			} else {
+				logx.Info("HTML report generated: %s", config.ReportOutput)
+			}
+		}
 	}
 
 	// Print summary
 	duration := time.Since(startTime)
-	logx.Printf("\nArquivos: %d | Alterados: %d | Restantes não-UTF8: %d | Erros: %d | Ignorados: %d | Tempo: %v\n",
+	summaryMsg := fmt.Sprintf("\n📊 Arquivos: %d | Alterados: %d | Restantes não-UTF8: %d | Erros: %d | Ignorados: %d | Tempo: %v\n",
 		stats.Total, stats.Changed, stats.NonUTF8, stats.Errors, stats.Skipped, duration)
+	
+	if config.Colors {
+		logx.Printf("%s", ui.Colorize(ui.Bold+ui.Cyan, summaryMsg))
+	} else {
+		logx.Printf("%s", summaryMsg)
+	}
 
 	if config.FailIfNotUTF8 && stats.NonUTF8 > 0 {
 		return fmt.Errorf("found %d non-UTF8 files", stats.NonUTF8)
@@ -298,7 +446,12 @@ func convertFile(path, fromEncoding string, confidence int, info os.FileInfo, co
 	var reader io.Reader = file
 	var applied []string
 
-	// Convert encoding if needed
+	// Handle reverse conversion (UTF-8 to legacy encoding)
+	if config.ToEncoding != "" {
+		return convertToLegacyEncoding(path, reader, config, applied)
+	}
+
+	// Convert encoding if needed (legacy to UTF-8)
 	if fromEncoding != "" && fromEncoding != "utf-8" {
 		convertedReader, appliedConv, err := codec.ConvertToUTF8Stream(reader, fromEncoding)
 		if err != nil {
@@ -445,4 +598,86 @@ func copyFile(src, dst string) error {
 
 	_, err = io.Copy(destFile, sourceFile)
 	return err
+}
+
+func convertToLegacyEncoding(path string, reader io.Reader, config *Config, applied []string) Result {
+	// Read UTF-8 content
+	content, err := io.ReadAll(reader)
+	if err != nil {
+		return Result{Path: path, Status: "ERRO", Error: err}
+	}
+
+	contentStr := string(content)
+	
+	// Validate and preprocess for target encoding
+	processedContent, warnings, canConvert := codec.PreprocessForISO(contentStr, config.AutoFix)
+	
+	if config.ValidateOnly {
+		if canConvert {
+			return Result{
+				Path: path, Status: "OK", From: "utf-8", 
+				Confidence: 100, Applied: fmt.Sprintf("compatible-with-%s", config.ToEncoding),
+			}
+		} else {
+			errorMsg := fmt.Sprintf("incompatible with %s: %v", config.ToEncoding, warnings)
+			return Result{Path: path, Status: "WARN", From: "utf-8", Error: fmt.Errorf(errorMsg)}
+		}
+	}
+	
+	if !canConvert && !config.AutoFix {
+		errorMsg := fmt.Sprintf("cannot convert to %s without --auto-fix: %v", config.ToEncoding, warnings)
+		return Result{Path: path, Status: "WARN", From: "utf-8", Error: fmt.Errorf(errorMsg)}
+	}
+	
+	// Convert to target encoding
+	convertedReader, appliedConv, err := codec.ConvertFromUTF8Stream(strings.NewReader(processedContent), config.ToEncoding)
+	if err != nil {
+		return Result{Path: path, Status: "ERRO", Error: err}
+	}
+	
+	if appliedConv != "" {
+		applied = append(applied, appliedConv)
+	}
+	
+	if len(warnings) > 0 {
+		applied = append(applied, "auto-fixed")
+	}
+	
+	// Read converted content
+	convertedContent, err := io.ReadAll(convertedReader)
+	if err != nil {
+		return Result{Path: path, Status: "ERRO", Error: err}
+	}
+	
+	// Check if content changed
+	if string(convertedContent) == string(content) {
+		return Result{
+			Path: path, Status: "OK", From: "utf-8", 
+			Confidence: 100, Applied: strings.Join(applied, ","),
+		}
+	}
+	
+	if config.DryRun {
+		return Result{
+			Path: path, Status: "FIX", From: "utf-8",
+			Confidence: 100, Applied: strings.Join(applied, ","),
+		}
+	}
+	
+	// Write converted file
+	var writeErr error
+	if config.InPlace {
+		writeErr = writeFileInPlace(path, convertedContent, nil, config)
+	} else {
+		writeErr = writeFileToStdout(convertedContent)
+	}
+	
+	if writeErr != nil {
+		return Result{Path: path, Status: "ERRO", Error: writeErr}
+	}
+	
+	return Result{
+		Path: path, Status: "FIX", From: "utf-8",
+		Confidence: 100, Applied: strings.Join(applied, ","),
+	}
 }

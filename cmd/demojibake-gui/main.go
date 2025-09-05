@@ -20,7 +20,7 @@ import (
 )
 
 type GUI struct {
-	app    *app.App
+	app    fyne.App
 	window fyne.Window
 	
 	pathEntry      *widget.Entry
@@ -50,20 +50,29 @@ func main() {
 	myWindow := myApp.NewWindow("Demojibakelizador")
 	myWindow.Resize(fyne.NewSize(760, 560))
 	
-	gui := &GUI{app: &myApp}
+	gui := &GUI{app: myApp}
 	gui.setupUI(myWindow)
 	
 	myWindow.ShowAndRun()
 }
 
 func (g *GUI) setupUI(w fyne.Window) {
-	// Path selection
+	g.window = w
+	
+	// Path selection with drag & drop
 	g.pathEntry = widget.NewEntry()
-	g.pathEntry.SetPlaceHolder("Selecione arquivo ou pasta...")
+	g.pathEntry.SetPlaceHolder("Arraste arquivos/pastas aqui ou clique para selecionar...")
+	
+	// Enable drag & drop
+	w.SetOnDropped(func(position fyne.Position, uris []fyne.URI) {
+		if len(uris) > 0 {
+			g.pathEntry.SetText(uris[0].Path())
+		}
+	})
 	
 	fileButton := widget.NewButton("Arquivo", func() {
-		dialog.ShowFileOpen(func(reader fyne.URIReadCloser) {
-			if reader != nil {
+		dialog.ShowFileOpen(func(reader fyne.URIReadCloser, err error) {
+			if err == nil && reader != nil {
 				g.pathEntry.SetText(reader.URI().Path())
 				reader.Close()
 			}
@@ -71,8 +80,8 @@ func (g *GUI) setupUI(w fyne.Window) {
 	})
 	
 	folderButton := widget.NewButton("Pasta", func() {
-		dialog.ShowFolderOpen(func(uri fyne.ListableURI) {
-			if uri != nil {
+		dialog.ShowFolderOpen(func(uri fyne.ListableURI, err error) {
+			if err == nil && uri != nil {
 				g.pathEntry.SetText(uri.Path())
 			}
 		}, w)
@@ -85,8 +94,22 @@ func (g *GUI) setupUI(w fyne.Window) {
 	g.modeSelect = widget.NewRadioGroup([]string{
 		"Detectar (não altera)",
 		"Converter p/ UTF-8",
+		"Converter p/ ISO-8859-1",
+		"Validar compatibilidade",
 	}, nil)
 	g.modeSelect.SetSelected("Converter p/ UTF-8")
+	
+	// Preset selection
+	presetSelect := widget.NewSelect([]string{
+		"Custom",
+		"Java Project",
+		"Web Project",
+		"Documentation",
+		"Go Project",
+	}, func(preset string) {
+		g.applyPreset(preset)
+	})
+	presetSelect.SetSelected("Custom")
 	
 	// Encoding selection
 	g.fromSelect = widget.NewSelect([]string{
@@ -132,6 +155,8 @@ func (g *GUI) setupUI(w fyne.Window) {
 	
 	g.failCheck = widget.NewCheck("Falhar se não-UTF-8 (CI)", nil)
 	
+	autoFixCheck := widget.NewCheck("Auto-corrigir caracteres incompatíveis", nil)
+	
 	// Text entries
 	g.backupEntry = widget.NewEntry()
 	g.backupEntry.SetText(".bak")
@@ -154,12 +179,15 @@ func (g *GUI) setupUI(w fyne.Window) {
 	
 	// Layout
 	form := container.NewVBox(
-		widget.NewLabel("Caminho:"),
+		widget.NewLabel("📁 Caminho:"),
 		pathContainer,
 		
 		widget.NewSeparator(),
 		
-		widget.NewLabel("Modo:"),
+		widget.NewLabel("⚙️ Preset:"),
+		presetSelect,
+		
+		widget.NewLabel("🎯 Modo:"),
 		g.modeSelect,
 		
 		widget.NewLabel("Encoding origem:"),
@@ -175,7 +203,9 @@ func (g *GUI) setupUI(w fyne.Window) {
 			g.dryRunCheck, g.mojibakeCheck,
 			g.stripBOMCheck, g.addBOMCheck,
 		),
-		g.failCheck,
+		container.NewGridWithColumns(2,
+			g.failCheck, autoFixCheck,
+		),
 		
 		widget.NewSeparator(),
 		
@@ -281,8 +311,13 @@ func (g *GUI) buildArgs() []string {
 	args = append(args, "-path", g.pathEntry.Text)
 	
 	// Mode
-	if g.modeSelect.Selected == "Detectar (não altera)" {
+	switch g.modeSelect.Selected {
+	case "Detectar (não altera)":
 		args = append(args, "-detect")
+	case "Converter p/ ISO-8859-1":
+		args = append(args, "-to", "iso-8859-1")
+	case "Validar compatibilidade":
+		args = append(args, "-to", "iso-8859-1", "-validate-only")
 	}
 	
 	// From encoding
@@ -362,6 +397,42 @@ func (g *GUI) findBinary() string {
 	}
 	
 	return ""
+}
+
+func (g *GUI) applyPreset(presetName string) {
+	presets := map[string]map[string]interface{}{
+		"Java Project": {
+			"extensions": ".java,.properties,.xml",
+			"recursive": true,
+			"backup": true,
+			"mojibake": true,
+		},
+		"Web Project": {
+			"extensions": ".html,.css,.js,.ts,.json",
+			"recursive": true,
+			"backup": true,
+			"mojibake": true,
+		},
+		"Documentation": {
+			"extensions": ".md,.txt,.rst",
+			"recursive": true,
+			"backup": true,
+			"mojibake": true,
+		},
+		"Go Project": {
+			"extensions": ".go,.mod,.sum",
+			"recursive": true,
+			"backup": true,
+			"mojibake": true,
+		},
+	}
+	
+	if preset, exists := presets[presetName]; exists {
+		g.extEntry.SetText(preset["extensions"].(string))
+		g.recursiveCheck.SetChecked(preset["recursive"].(bool))
+		g.inPlaceCheck.SetChecked(preset["backup"].(bool))
+		g.mojibakeCheck.SetChecked(preset["mojibake"].(bool))
+	}
 }
 
 func (g *GUI) readOutput(pipe io.ReadCloser, prefix string) {
