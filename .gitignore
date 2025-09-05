@@ -49,3 +49,11 @@ Thumbs.db
 # Local environment files
 .env
 .env.local
+
+# Setup scripts (não devem ir para produção)
+setup-git-ssh.ps1
+init-repository.ps1
+quick-deploy.ps1
+deploy-https.ps1
+cleanup-scripts.ps1
+SETUP_GITHUB.md
