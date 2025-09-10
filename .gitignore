@@ -1,0 +1,28 @@
+# Build artifacts
+lib/
+target/
+*.dll
+*.so
+*.dylib
+*.bin
+
+# IDE
+.vscode/
+.idea/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Corpus files (large)
+scripts/palavras_com_especiais.txt
+scripts/dictionary_complete.txt
+scripts/dictionary_470k.bin
+
+# Temporary
+*.tmp
+*.temp
