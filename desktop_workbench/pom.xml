@@ -56,7 +56,7 @@
         <dependency>
             <groupId>ch.qos.logback</groupId>
             <artifactId>logback-classic</artifactId>
-            <version>1.4.11</version>
+            <version>1.5.13</version>
         </dependency>
     </dependencies>
     
@@ -73,7 +73,7 @@
                 <artifactId>javafx-maven-plugin</artifactId>
                 <version>0.0.8</version>
                 <configuration>
-                    <mainClass>ui.MainApplication</mainClass>
+                    <mainClass>ui.TextEncodingWorkbench</mainClass>
                 </configuration>
             </plugin>
             
@@ -82,11 +82,11 @@
                 <artifactId>jpackage-maven-plugin</artifactId>
                 <version>1.6.0</version>
                 <configuration>
-                    <name>Demojibakelizador</name>
+                    <name>TextEncodingWorkbench</name>
                     <appVersion>2.0.0</appVersion>
-                    <vendor>Enterprise Solutions</vendor>
+                    <vendor>Encoding Solutions</vendor>
                     <mainJar>demojibake-desktop-2.0.0.jar</mainJar>
-                    <mainClass>ui.MainApplication</mainClass>
+                    <mainClass>ui.TextEncodingWorkbench</mainClass>
                 </configuration>
             </plugin>
         </plugins>

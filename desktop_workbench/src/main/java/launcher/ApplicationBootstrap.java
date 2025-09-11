@@ -3,37 +3,46 @@ package launcher;
 import javafx.application.Application;
 import javafx.application.Platform;
 import javafx.stage.Stage;
-import ui.MainApplication;
-import core.DemojibakelizadorNative;
+import ui.TextEncodingWorkbench;
+import core.MojibakeProcessor;
 import java.util.concurrent.CompletableFuture;
 import java.util.logging.Logger;
 import java.util.logging.Level;
 
-public class EnterpriseApplication extends Application {
+public class ApplicationBootstrap extends Application {
     
-    private static final Logger LOGGER = Logger.getLogger(EnterpriseApplication.class.getName());
+    private static final Logger LOGGER = Logger.getLogger(ApplicationBootstrap.class.getName());
     
     // Performance optimization flags
     static {
         System.setProperty("java.awt.headless", "false");
-        System.setProperty("prism.order", "d3d,sw");
+        
+        // Solução bizarra #10: Force hardware acceleration and smooth animations
+        System.setProperty("prism.order", "d3d,es2,sw"); // Try D3D first, then OpenGL, then software
+        System.setProperty("prism.vsync", "true"); // Enable VSync to prevent tearing
         System.setProperty("prism.lcdtext", "false");
         System.setProperty("prism.text", "t2k");
         System.setProperty("javafx.animation.fullspeed", "true");
+        System.setProperty("javafx.animation.pulse", "60"); // Force 60 FPS
         
-        // JVM optimization
+        // Solução bizarra #11: GPU memory and pipeline optimizations
+        System.setProperty("prism.poolstats", "true");
+        System.setProperty("prism.dirtyopts", "false"); // Disable dirty region optimizations
+        System.setProperty("quantum.multithreaded", "false"); // Single-threaded rendering
+        
+        // JVM optimization for smoother animations
         System.setProperty("java.vm.options", 
-            "-XX:+UseG1GC -XX:MaxGCPauseMillis=20 -XX:+UnlockExperimentalVMOptions");
+            "-XX:+UseG1GC -XX:MaxGCPauseMillis=10 -XX:+UnlockExperimentalVMOptions -XX:+UseStringDeduplication");
     }
     
     @Override
     public void init() throws Exception {
-        LOGGER.info("Initializing Demojibakelizador Enterprise...");
+        LOGGER.info("Initializing Text Encoding Workbench...");
         
         // Async initialization for faster startup
         CompletableFuture<Void> nativeInit = CompletableFuture.runAsync(() -> {
             try {
-                int status = DemojibakelizadorNative.INSTANCE.Initialize();
+                int status = MojibakeProcessor.INSTANCE.Initialize();
                 if (status != 1) {
                     throw new RuntimeException("Native library initialization failed: " + status);
                 }
@@ -60,9 +69,9 @@ public class EnterpriseApplication extends Application {
     public void start(Stage primaryStage) throws Exception {
         LOGGER.info("Starting main application window");
         
-        // Delegate to main application
-        MainApplication mainApp = new MainApplication();
-        mainApp.start(primaryStage);
+        // Launch encoding workbench
+        TextEncodingWorkbench workbench = new TextEncodingWorkbench();
+        workbench.start(primaryStage);
         
         // Setup global exception handler
         Thread.setDefaultUncaughtExceptionHandler((thread, exception) -> {
@@ -83,7 +92,7 @@ public class EnterpriseApplication extends Application {
         
         try {
             // Cleanup native resources
-            DemojibakelizadorNative.INSTANCE.Shutdown();
+            MojibakeProcessor.INSTANCE.Shutdown();
             LOGGER.info("Native library shutdown completed");
         } catch (Exception e) {
             LOGGER.log(Level.WARNING, "Error during native library shutdown", e);
@@ -103,7 +112,7 @@ public class EnterpriseApplication extends Application {
         System.setProperty("java.util.logging.config.class", 
             "launcher.LoggingConfiguration");
         
-        LOGGER.info("Starting Demojibakelizador Enterprise v2.0");
+        LOGGER.info("Starting Text Encoding Workbench v2.0");
         
         // Launch JavaFX application
         launch(args);

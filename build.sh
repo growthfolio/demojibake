@@ -19,18 +19,18 @@ fi
 
 echo "✅ Prerequisites check passed"
 
-# Build Go core with optimizations
-echo "🔧 Building native libraries..."
-cd core
+# Build character analysis engine with optimizations
+echo "🔧 Building character analysis engine..."
+cd character_analysis_engine
 chmod +x build.sh
 ./build.sh
 cd ..
 
 echo "✅ Native libraries built successfully"
 
-# Build JavaFX application
-echo "🎨 Building JavaFX application..."
-cd gui
+# Build desktop workbench application
+echo "🎨 Building desktop workbench application..."
+cd desktop_workbench
 
 # Clean and compile
 mvn clean compile -q
@@ -42,14 +42,8 @@ echo "📦 Packaging application..."
 mvn package -q
 
 echo "🎯 Running application..."
-# Run with optimized JVM flags
-mvn javafx:run \
-    -Djava.library.path="../lib/current" \
-    -Djavafx.args="--add-opens javafx.controls/javafx.scene.control.skin=ALL-UNNAMED" \
-    -Xmx2G -Xms512M \
-    -XX:+UseG1GC \
-    -XX:MaxGCPauseMillis=20 \
-    -Dprism.order=d3d,sw \
-    -Djavafx.animation.fullspeed=true
+# Set library path and run
+export LD_LIBRARY_PATH="../native_libraries/current:$LD_LIBRARY_PATH"
+mvn javafx:run -Djava.library.path="../native_libraries/current"
 
-echo "🏁 Build and execution completed!"
+echo "🏁 Build completed! Use 'cd desktop_workbench && mvn javafx:run' to run the application."
